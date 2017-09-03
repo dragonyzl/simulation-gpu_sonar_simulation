@@ -69,20 +69,29 @@ void Sonar::convertShader(cv::Mat& cv_image, std::vector<float>& bins) {
     }
 
     // apply speckle noise to sonar image
-    applySpeckleNoise(bins, 0.4, 0.15);
+    applySpeckleNoise(bins);
 }
 
-void Sonar::applySpeckleNoise(std::vector<float>& bins, float mean, float stddev) {
-    // produce speckle noise using a gaussian distribution
+void Sonar::applySpeckleNoise(std::vector<float>& bins) {
+    // multiplicative component
+    double mult_mean = 0.4, mult_stddev = 0.15;
     unsigned long seed = base::Time::now().toMicroseconds();
     boost::random::mt19937 engine(seed);
-    boost::random::normal_distribution<float> dist(mean, stddev);
-
-    // apply noise to sonar data
+    boost::random::normal_distribution<float> dist(mult_mean, mult_stddev);
     for (size_t i = 0; i < bins.size(); i++) {
         float noised = bins[i] * dist(engine);
         bins[i] = noised < 0 ? 0 : noised;
     }
+
+    // additive component
+    double add_mean = 0.0, add_stddev = 0.005;
+    cv::Mat add_noise = cv::Mat(1, bins.size(), CV_32F);
+    cv::randn(add_noise, add_mean, add_stddev);
+    cv::Mat noised_bins(1, bins.size(), CV_32F, (void*) bins.data());
+    noised_bins += add_noise;
+    noised_bins.setTo(0, noised_bins < 0);
+    noised_bins.setTo(1, noised_bins > 1);
+    bins.assign((float*) noised_bins.datastart, (float*) noised_bins.dataend);
 }
 
 float Sonar::sigmoid(float x) {
